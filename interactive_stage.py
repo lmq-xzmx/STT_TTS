@@ -98,8 +98,9 @@ class VideoPlayer:
         
         # 初始化语音识别
         self.recognizer = sr.Recognizer()
-        self.recognizer.energy_threshold = 4000  # 调整灵敏度
+        self.recognizer.energy_threshold = 3000  # 降低灵敏度阈值，使其更容易检测到语音
         self.recognizer.dynamic_energy_threshold = True
+        self.recognizer.pause_threshold = 4.0  # 设置语音中断超过4秒才会停止接收
         
         # 定义唤醒词映射到角色
         self.raw_wake_words = {
@@ -221,21 +222,41 @@ class VideoPlayer:
     def process_single_speech(self, character):
         """处理单次语音输入"""
         try:
-            # 添加倒计时提醒
-            for i in range(3, 0, -1):
-                self.update_status(f"请准备说话... {i}秒")
-                time.sleep(1)
+            # 创建一个事件来标记语音接收是否开始
+            speech_started = threading.Event()
             
-            self.update_status("请开始说话...")
+            # 在单独的线程中进行倒计时，不阻塞语音接收
+            def countdown_thread():
+                for i in range(3, 0, -1):
+                    if speech_started.is_set():
+                        # 如果已经开始接收语音，则停止倒计时
+                        break
+                    self.update_status(f"请准备说话... {i}秒")
+                    time.sleep(1)
+                if not speech_started.is_set():
+                    self.update_status("请开始说话...")
+            
+            # 启动倒计时线程
+            countdown = threading.Thread(target=countdown_thread)
+            countdown.daemon = True
+            countdown.start()
             
             # 等待用户输入
             with sr.Microphone() as source:
                 try:
-                    # 给用户时间说话，最多10秒，超过4秒无声会自动结束
-                    audio = self.recognizer.listen(source, timeout=3, phrase_time_limit=10)
-                    self.update_status("正在处理您的问题...")
+                    # 设置更长的超时时间，但要求用户在3秒内开始说话
+                    self.recognizer.pause_threshold = 4.0  # 设置语音中断超过4秒才会停止接收
+                    
+                    # 开始监听
+                    self.update_status("正在等待您的语音输入...")
+                    audio = self.recognizer.listen(source, timeout=10, phrase_time_limit=20)
+                    
+                    # 标记语音接收已开始
+                    speech_started.set()
+                    self.update_status("正在处理您的语音...")
                     
                     # 识别语音
+                    self.update_status("正在将语音转换为文字...")
                     text = self.recognizer.recognize_google(audio, language="zh-CN")
                     self.update_status(f"识别到: {text}")
                     
@@ -284,36 +305,89 @@ class VideoPlayer:
     def _get_response_thread(self, text):
         """在单独的线程中获取响应"""
         try:
-            response = get_response(self.current_character, text)
+            self.update_status("正在生成AI回复...")
             
-            # 移除括号中的内容用于显示
-            display_response = re.sub(r'\([^)]*\)', '', response)
+            # 创建一个事件来标记响应生成是否完成
+            response_ready = threading.Event()
+            response_text = [None]  # 使用列表存储响应，以便在线程间共享
             
-            self.append_text(f"\n{self.current_character['name']}: {display_response}")
+            # 在单独的线程中获取响应
+            def get_ai_response():
+                try:
+                    response_text[0] = get_response(self.current_character, text)
+                    response_ready.set()
+                except Exception as e:
+                    self.update_status(f"生成回复时出错: {str(e)}")
             
-            # 查找并播放生成的语音文件
-            speech_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "speech_files")
-            if os.path.exists(speech_dir):
-                # 获取最新生成的语音文件
-                files = [os.path.join(speech_dir, f) for f in os.listdir(speech_dir) 
-                         if f.endswith('.mp3') and f.startswith(f"{self.current_character['name']}_")]
-                if files:
-                    latest_file = max(files, key=os.path.getctime)
-                    self.update_status(f"正在播放语音...")
+            # 启动响应生成线程
+            response_thread = threading.Thread(target=get_ai_response)
+            response_thread.daemon = True
+            response_thread.start()
+            
+            # 显示等待动画
+            dots = 0
+            while not response_ready.is_set() and dots < 60:  # 最多等待约30秒
+                dots = (dots % 3) + 1
+                self.update_status(f"正在生成AI回复{'.' * dots}")
+                time.sleep(0.5)
+            
+            # 如果响应已经生成
+            if response_ready.is_set() and response_text[0]:
+                response = response_text[0]
+                
+                # 移除括号中的内容用于显示
+                display_response = re.sub(r'\([^)]*\)', '', response)
+                
+                self.append_text(f"\n{self.current_character['name']}: {display_response}")
+                self.update_status("正在生成语音...")
+                
+                # 查找并播放生成的语音文件
+                speech_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "speech_files")
+                if os.path.exists(speech_dir):
+                    # 等待语音文件生成完成
+                    max_wait = 30  # 最多等待30秒
+                    wait_count = 0
+                    latest_file = None
                     
-                    # 使用pygame播放音频
-                    try:
-                        pygame.mixer.music.load(latest_file)
-                        pygame.mixer.music.play()
-                        # 等待音频播放完成
-                        while pygame.mixer.music.get_busy():
-                            time.sleep(0.1)
-                    except Exception as e:
-                        self.update_status(f"播放语音时出错: {str(e)}")
+                    while wait_count < max_wait:
+                        # 获取最新生成的语音文件
+                        files = [os.path.join(speech_dir, f) for f in os.listdir(speech_dir) 
+                                if f.endswith('.mp3') and f.startswith(f"{self.current_character['name']}_")]
+                        
+                        if files:
+                            latest_file = max(files, key=os.path.getctime)
+                            # 检查文件是否是最近5秒内创建的
+                            if time.time() - os.path.getctime(latest_file) < 5:
+                                break
+                        
+                        wait_count += 1
+                        time.sleep(1)
+                        self.update_status(f"等待语音生成... {wait_count}秒")
+                    
+                    if latest_file:
+                        self.update_status(f"正在播放语音...")
+                        
+                        # 使用pygame播放音频
+                        try:
+                            pygame.mixer.music.load(latest_file)
+                            pygame.mixer.music.play()
+                            
+                            # 显示播放进度
+                            play_time = 0
+                            while pygame.mixer.music.get_busy():
+                                play_time += 0.5
+                                self.update_status(f"正在播放语音... {play_time:.1f}秒")
+                                time.sleep(0.5)
+                        except Exception as e:
+                            self.update_status(f"播放语音时出错: {str(e)}")
+                    else:
+                        self.update_status("未找到最近生成的语音文件")
+            else:
+                self.update_status("生成回复超时，请重试")
             
-            self.update_status("准备就绪")
+            self.update_status("准备就绪，等待唤醒词...")
         except Exception as e:
-            self.update_status(f"生成回复时出错: {str(e)}")
+            self.update_status(f"处理响应时出错: {str(e)}")
     
     def update_status(self, text):
         """更新状态标签"""
