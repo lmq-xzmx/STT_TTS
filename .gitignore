@@ -1,0 +1,4 @@
+# 忽略 speech_files 中的所有文件
+/speech_files/*
+# 但保留 speech_files 文件夹本身（通过添加一个 .gitkeep 文件）
+!/speech_files/.gitkeep

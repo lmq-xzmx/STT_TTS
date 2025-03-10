@@ -1,0 +1,6 @@
+Downloading https://pypi.tuna.tsinghua.edu.cn/packages/fc/8f/a178d73277bf2d838617fa20ba4ae6952e26074664aacb53ae4532a69588/openai-1.65.5-py3-none-any.whl (474 kB)
+Downloading https://pypi.tuna.tsinghua.edu.cn/packages/6a/3e/b68c118422ec867fa7ab88444e1274aa40681c606d59ac27de5a5588f082/python_dotenv-1.0.1-py3-none-any.whl (19 kB)
+Using cached https://pypi.tuna.tsinghua.edu.cn/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl (20 kB)
+Downloading https://pypi.tuna.tsinghua.edu.cn/packages/6c/b0/bfa1f6f2c956b948802ef5a021281978bf53b7a6ca54bb126fd88a5d014e/jiter-0.8.2-cp313-cp313-macosx_10_12_x86_64.whl (301 kB)
+wheel is already installed with the same version as the provided wheel. Use --force-reinstall to force an installation of the wheel.
+Would install distro-1.9.0 jiter-0.8.2 openai-1.65.5 python-dotenv-1.0.1
