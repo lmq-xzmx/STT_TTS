@@ -16,8 +16,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'deepseekV3_api'))
 
 def main():
     parser = argparse.ArgumentParser(description='STT_TTS 语音识别与合成工具')
-    parser.add_argument('--mode', choices=['stt', 'tts', 'chat'], default='chat',
-                        help='运行模式: stt(语音识别), tts(语音合成), chat(对话模式)')
+    parser.add_argument('--mode', choices=['stt', 'tts', 'chat', 'interactive'], default='chat',
+                        help='运行模式: stt(语音识别), tts(语音合成), chat(对话模式), interactive(交互舞台)')
     args = parser.parse_args()
     
     if args.mode == 'stt':
@@ -35,6 +35,11 @@ def main():
         # 导入并运行聊天模块
         from deepseekV3_api.chat import main as chat_main
         chat_main()
+    
+    elif args.mode == 'interactive':
+        # 导入并运行交互舞台
+        from interactive_stage import main as interactive_main
+        interactive_main()
 
 if __name__ == "__main__":
     main()

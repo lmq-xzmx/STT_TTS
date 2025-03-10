@@ -5,7 +5,8 @@ import re
 from pathlib import Path
 import time
 from dotenv import load_dotenv
-from characters import teacher, little_horse, yellow_cow, squirrel, narrator
+# 修改第8行
+from deepseekV3_api.characters import teacher, little_horse, yellow_cow, squirrel, narrator
 
 # 导入文件管理模块
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -123,10 +124,14 @@ def get_response(character, user_input):
     
     try:
         print(f"\n正在生成{character['name']}的语音...")
+        
+        # 移除括号中的内容用于语音合成
+        speech_text = re.sub(r'\([^)]*\)', '', full_response)
+        
         with client.audio.speech.with_streaming_response.create(
             model=VOICE_MODEL,  # 使用环境变量中的语音模型
             voice=voice_id,
-            input=full_response,
+            input=speech_text,  # 使用处理后的文本
             response_format="mp3"
         ) as response:
             response.stream_to_file(speech_file_path)
