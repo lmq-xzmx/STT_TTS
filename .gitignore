@@ -1,4 +1,37 @@
-# 忽略 speech_files 中的所有文件
-/speech_files/*
-# 但保留 speech_files 文件夹本身（通过添加一个 .gitkeep 文件）
-!/speech_files/.gitkeep
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 环境变量
+.env
+
+# 语音文件
+speech_files/
+*.mp3
+*.wav
+
+# 日志
+*.log
+
+# 其他
+.DS_Store
+.idea/
+.vscode/
