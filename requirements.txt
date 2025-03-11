@@ -6,12 +6,11 @@ gradio==5.20.1
 jieba==0.42.1
 kaldi_native_fbank==1.21.0
 librosa==0.10.2.post1
-numpy==2.2.3
+numpy<=1.26.4
 onnx==1.17.0
 onnxruntime==1.21.0
 openai==1.65.5
 python-dotenv==1.0.1
-PyYAML==6.0.2
 PyYAML==6.0.2
 Requests==2.32.3
 torch==2.2.2
