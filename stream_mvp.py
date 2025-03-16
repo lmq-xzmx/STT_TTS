@@ -37,6 +37,8 @@ from deepseekV3_api.generate_speech import generate_speech_chunk
 # 创建队列用于组件间通信
 stt_queue = queue.Queue()
 llm_queue = queue.Queue()
+# 添加一个新的控制队列，用于控制STT线程的状态
+control_queue = queue.Queue()
 
 # 添加唤醒词和系统状态
 WAKE_WORD = "小马小马"
@@ -54,10 +56,30 @@ def stt_worker():
     
     last_text = ""
     is_activated = False  # 是否已被唤醒
+    is_paused = False     # 是否暂停监听
     last_speech_time = time.time()  # 上次语音时间
     
     try:
         while True:
+            # 检查控制队列，是否需要暂停或恢复监听
+            try:
+                control_msg = control_queue.get_nowait()
+                if control_msg == "pause":
+                    is_paused = True
+                    is_activated = False  # 重置激活状态
+                    print("麦克风监听已暂停，等待语音播放完成...")
+                elif control_msg == "resume":
+                    is_paused = False
+                    print("麦克风监听已恢复，请说出唤醒词...")
+                control_queue.task_done()
+            except queue.Empty:
+                pass
+            
+            # 如果暂停状态，跳过语音处理
+            if is_paused:
+                time.sleep(0.1)
+                continue
+                
             current_text = stt.get_text()
             
             # 只处理新增的文本
@@ -196,67 +218,63 @@ def llm_worker():
 # 修改tts_worker函数，增加本地TTS备选方案
 def tts_worker():
     """TTS工作线程"""
-    character = little_horse
-    
-    # 累积的响应文本
-    current_response = ""
-    
     try:
         while True:
-            # 检查是否有新的LLM输出
+            # 收集完整的响应
+            response_text = ""
             try:
                 while not llm_queue.empty():
                     chunk = llm_queue.get_nowait()
+                    response_text += chunk
+                    llm_queue.task_done()
                     
-                    # 检查是否是结束标记
-                    if chunk == "__END__":
-                        # 清空当前响应
-                        current_response = ""
-                        continue
-                    
-                    # 累积响应文本
-                    current_response += chunk
-                    
-                    # 当累积一定长度或遇到标点符号时，生成语音
-                    if len(chunk) > 10 or any(p in chunk for p in "。，！？.,:!?"):
-                        try:
-                            # 尝试使用DeepSeek API生成语音
-                            generate_speech_chunk(chunk, character.get("voice_id"))
-                        except Exception as e:
-                            print(f"语音生成失败，使用系统TTS: {e}")
-                            # 使用系统自带的say命令作为备选方案
-                            safe_text = chunk.replace('"', '\\"')
-                            os.system(f'say -v Ting-Ting "{safe_text}"')
+                    # 打印响应片段
+                    print(f"响应片段: {chunk}")
             except queue.Empty:
                 pass
             
+            # 如果有响应文本，生成并播放语音
+            if response_text:
+                # 在播放语音前暂停麦克风监听
+                control_queue.put("pause")
+                
+                # 生成语音
+                speech_file = generate_speech_chunk(response_text)
+                
+                # 播放完成后恢复麦克风监听
+                control_queue.put("resume")
+                
             time.sleep(0.1)
     except Exception as e:
         print(f"TTS错误: {str(e)}")
 
+# 修改main函数，添加新的TTS线程
 def main():
+    """主函数"""
     print("启动流式语音对话系统...")
     print(f"唤醒词: '{WAKE_WORD}'，停顿超时: {SILENCE_TIMEOUT}秒")
     
-    # 创建并启动工作线程
+    # 创建并启动STT线程
     stt_thread = threading.Thread(target=stt_worker)
-    llm_thread = threading.Thread(target=llm_worker)
-    tts_thread = threading.Thread(target=tts_worker)
-    
     stt_thread.daemon = True
-    llm_thread.daemon = True
-    tts_thread.daemon = True
-    
     stt_thread.start()
+    
+    # 创建并启动LLM线程
+    llm_thread = threading.Thread(target=llm_worker)
+    llm_thread.daemon = True
     llm_thread.start()
+    
+    # 创建并启动TTS线程
+    tts_thread = threading.Thread(target=tts_worker)
+    tts_thread.daemon = True
     tts_thread.start()
     
-    # 主线程等待
+    # 等待线程结束
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("程序被用户中断")
+        print("\n程序已终止")
 
 if __name__ == "__main__":
     main()
