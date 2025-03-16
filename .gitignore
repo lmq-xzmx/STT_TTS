@@ -36,3 +36,6 @@ speech_files/
 .idea/
 .vscode/
 **/.DS_Store
+# 忽略recordings目录
+/recordings/
+recordings/
