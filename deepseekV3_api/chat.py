@@ -144,7 +144,12 @@ def get_response(character, user_input):
 def normalize_wake_word(text):
     """去除唤醒词中的所有符号，只保留字母和数字"""
     return re.sub(r'[^\w\s]', '', text).strip()
-
+def get_streaming_response(character, user_input):
+    """流式版本的get_response函数"""
+    response = get_response(character, user_input)
+    # 将响应分成小块返回
+    for i in range(0, len(response), 10):
+        yield response[i:i+10]
 def main():
     print("欢迎来到小马过河互动故事系统!")
     

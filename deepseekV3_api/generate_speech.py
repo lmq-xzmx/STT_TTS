@@ -258,3 +258,78 @@ if __name__ == "__main__":
     
     # 流式生成并播放语音
     stream_and_play_speech(user_input)
+
+
+# 添加以下函数到generate_speech.py文件中
+
+def generate_speech_chunk(text, voice_id=None):
+    """
+    为文本块生成语音并播放
+    
+    Args:
+        text (str): 要转换为语音的文本
+        voice_id (str, optional): 要使用的语音ID，如果为None则使用默认语音
+    
+    Returns:
+        str: 生成的语音文件路径
+    """
+    from openai import OpenAI
+    import os
+    import time
+    from pathlib import Path
+    import subprocess
+    
+    # 获取API密钥
+    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        print("错误: 未找到API密钥")
+        return None
+    
+    # 初始化OpenAI客户端
+    client = OpenAI(
+        api_key=api_key,
+        base_url=os.getenv("OPENAI_BASE_URL", "https://api.siliconflow.cn/v1")
+    )
+    
+    # 使用环境变量中的语音模型或默认值
+    voice_model = os.getenv("VOICE_MODEL", "FunAudioLLM/CosyVoice2-0.5B")
+    
+    # 如果未提供voice_id，使用默认值
+    if not voice_id:
+        voice_id = os.getenv("VOICE_ID", "speech:xiaoma:4on1q9y2b5:smwvoogtaqejdkgmfxpq")
+    
+    # 语音文件存储目录
+    speech_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / "temp"
+    if not speech_dir.exists():
+        speech_dir.mkdir(parents=True)
+    
+    # 生成唯一的文件名
+    timestamp = int(time.time())
+    speech_file_path = speech_dir / f"chunk_{timestamp}.mp3"
+    
+    try:
+        # 生成语音
+        with client.audio.speech.with_streaming_response.create(
+            model=voice_model,
+            voice=voice_id,
+            input=text,
+            response_format="mp3"
+        ) as response:
+            response.stream_to_file(str(speech_file_path))
+        
+        # 播放生成的语音
+        if os.path.exists(speech_file_path):
+            # 使用系统命令播放音频
+            if os.name == 'posix':  # macOS或Linux
+                subprocess.run(["afplay", str(speech_file_path)], check=True)
+            else:  # Windows
+                print(f"语音已生成，但在当前平台无法自动播放: {speech_file_path}")
+            
+            return str(speech_file_path)
+        else:
+            print("语音文件生成失败")
+            return None
+    
+    except Exception as e:
+        print(f"生成或播放语音时出错: {e}")
+        return None
